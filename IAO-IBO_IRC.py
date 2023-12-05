@@ -1,17 +1,44 @@
+##########################################################
+#                     IAO-IBO_IRC.py                     #
+##########################################################
+# Script written by Lucas W. de Lima.                    #
+# This script automates the calculation of single points #
+# and localizes the occupied molecular orbitals from     #
+# these calculations through the IAO-IBO method for each #
+# structure of an IRC path. Then parses the electronic   #
+# energy and IAO-OBO charges from the ORCA output files. #
+# Run the calculation as:                                #
+# $ python3 IAO-IBO_IRC.py fname -p [No. procs]          #
+#     --multip [multiplicity] -m [max. memory]           #
+#     -n [basename] --last_MO_alpha [No. last alpha MO]  #
+#     --last_MO_beta [No. last beta MO]                  #
+#                                                        #
+#          Last version written on Dec 05 2023.          #
+##########################################################
 import os
 import argparse
 import shutil
 import glob
-#import sys
 import subprocess
 import re
-#from datetime import datetime
+import timeit
+import datetime
+import numpy as np
 
 # ORCA binaries path:
 orca_dir = ""
 orca_loc_dir = ""
 
 def sp_inp(maxcore, pal, chrg, multip, XYZ, filename):
+    """
+    Writes single point input calculations
+    :param maxcore: Maximum memory used (per core) in the calculation (given in MB)
+    :param pal: Number of processor used in the parallel calculation
+    :param chrg: Molecular charge
+    :param multip: Molecular multiplicity
+    :param XYZ: Molecular cartesian coordinates
+    :param filename: Input basename
+    """
     if multip == '1':
         method = ['! RKS TPSS0 D3BJ def2-TZVPP def2/J RIJCOSX TightSCF\n']
     else:
@@ -34,6 +61,14 @@ def sp_inp(maxcore, pal, chrg, multip, XYZ, filename):
         for line in text:
             f.write(line)
 def loc_inp(basename, iteration, last_MO, operator, filename):
+    """
+    Writes the input for the orbital localization calculation
+    :param basename: Basename for the GBW file
+    :param iteration: Iteration of the loop in which the function is called
+    :param last_MO: Number of the last occupied MO
+    :param operator: Operator of the MO: 0=Alpha, 1=Beta
+    :param filename: Name of the final input file
+    """
     loc_inp_text = F"""{basename}.gbw          # input orbitals
 {basename}.loc.gbw      # output orbitals
 0                      # orbital window: first orbital to be localized e.g. first active
@@ -53,6 +88,12 @@ def loc_inp(basename, iteration, last_MO, operator, filename):
         f.write(loc_inp_text)
 
 def Eel_parser(file, parent_dir):
+    """
+    Parses the electronic energy of the single point calculation and writes the results
+    in the single_point_energies.dat file located in the parent directory
+    :param file: Name of the file to be parsed
+    :param parent_dir: Name of the parent directory
+    """
     with open(file, "r") as f:
         data = f.read()
         searchbox = re.findall(r"FINAL SINGLE POINT ENERGY(.*)\n", data)
@@ -63,9 +104,17 @@ def Eel_parser(file, parent_dir):
         sp_energies_file = os.path.join(parent_dir, "single_point_energies.dat")
         with open(sp_energies_file, "a+") as f:
             f.write(F"{basename} {Electronic_energy}\n")
-        print(F"Single point energy for {basename} written at single_point_energy.dat file.")
+        print(F"Single point energy for {basename} written at single_point_energy.dat file.\n")
 
 def IAO_chrg_parser(loc_output, iterator, parent_dir, IAO_charges_output_name):
+    """
+    Parses the IAO-IBO charges from the output of the localization calculation,
+    and writes the results in the proper charges output in the parent directory
+    :param loc_output: Output from the localization calculation
+    :param iterator: Iteration of the loop in which the function is called
+    :param parent_dir: Name of the parent directory
+    :param IAO_charges_output_name: Output of the IAO-IBO charges
+    """
     with open(loc_output, 'r') as f:
         data = f.read()
         searchbox = re.findall(r"^Warning!!!(.*)^Initial", data, re.MULTILINE | re.DOTALL)
@@ -100,11 +149,67 @@ def IAO_chrg_parser(loc_output, iterator, parent_dir, IAO_charges_output_name):
                 f.write(header)
             with open(results_file, "a+") as f:
                 f.write(line)
-            print(F"Results for {os.path.basename(loc_output)} written at {os.path.basename(results_file)}.")
+            print(F"Results for {os.path.basename(loc_output)} written at {os.path.basename(results_file)}.\n")
         elif iterator > 0:
             with open(results_file, "a+") as f:
                 f.write(line)
-            print(F"Results for {os.path.basename(loc_output)} written at {os.path.basename(results_file)}.")
+            print(F"Results for {os.path.basename(loc_output)} written at {os.path.basename(results_file)}.\n")
+
+def square_dif(array):
+    """
+    Calculates the square of the difference between the charge in the Nth point of the
+    IRC path in relation to the first point
+    :param array: Array with the charges
+    :return: Array with square of the differences
+    """
+    return [(array[i] - array[0])**2 for i in range(0, len(array))]
+
+def rmsd(array):
+    """
+    Calculates the RMSD between the charges
+    :param array: Array with square of the differences
+    :return: RMSD value between the charges
+    """
+    sum_x = np.sum(array)
+    n = len(array)
+    return np.sqrt((sum_x/n))
+
+def max_square_dif(array):
+    """
+    Shows the maximum value of the square of the difference between the charge in
+    the Nth point and the first point of the IRC path
+    :param array: Array with square of the differences
+    :return: Maximum value of the square of the differences
+    """
+    return np.max(array)
+
+def atoms(file):
+    """
+    Atoms of the molecule
+    :param file: Name of the output with the parsed charges for each atom
+    :return: List of numbered atoms
+    """
+    with open(file, "r") as f:
+        header = f.readline()
+        splitted_line = header.split(" ")
+        atoms = splitted_line[0:-1]
+    return atoms
+
+def results(file, data):
+    """
+    Writes the results of the maximum value of the square of the differences
+    and RMSD of the charges
+    :param file: Output with the charges
+    :param data: Arrays with the charges
+    """
+    for atom in range(0, len(atoms(file))):
+        Square_dif = square_dif(data[:,atom])
+        Max_Square_dif = max_square_dif(Square_dif)
+        rmsd_value = rmsd(Square_dif)
+        if len(atoms(file)[atom]) == 4:
+            print(F"{atoms(file)[atom]}           {Max_Square_dif:.4f}          {rmsd_value:.4f}")
+        else:
+            print(F"{atoms(file)[atom]}            {Max_Square_dif:.4f}          {rmsd_value:.4f}")
 
 # Parser creation
 parser = argparse.ArgumentParser(description="Calculates the IAO-IBO for structures in a IRC path.")
@@ -124,7 +229,6 @@ args = parser.parse_args()
 parent_dir = os.getcwd()
 file_path = os.path.join(parent_dir, args.fname)
 filenames = glob.glob(file_path)
-print(F"Parent directory for calculations: {parent_dir}")
 
 # Checking whether the input file(s) exists
 if len(filenames) == 0:
@@ -132,17 +236,31 @@ if len(filenames) == 0:
     Please, give a valid XYZ file for job submission.""")
 
 else:
+    startTime = timeit.default_timer()
+    print(F"""================= Calculation info =================
+IRC trajectory file:       {args.fname}
+Input basename:            {args.inpname}
+Molecule's charge:         {args.chrg}
+Molecule's multiplicity:   {args.multip}
+Max memory per core:       {args.memory}
+Number of cores:           {args.processors}
+Last Alpha MO:             {args.last_MO_alpha}
+Last Beta MO:              {args.last_MO_beta}
+Calculation starting date: {datetime.date.today()}
+====================================================\n""")
+    print(F"Parent directory for calculations: {parent_dir}\n")
     for filename in filenames:
         with open(filename, 'r') as irc_traj:
             irc = irc_traj.readlines()
             indices = [i for i, x in enumerate(irc) if x == irc[0]]
-            print(F"{args.fname} opened.")
+            print(F"{args.fname} opened.\n")
+            print("**** Starting the calculation ****\n\n")
 
             # Creating directories according to each XYZ structure from IRC_traj file
             for i in range(0, len(indices)):
                 struc_dir = os.path.join(parent_dir, F"{args.inpname}_IRC_{i}")
                 os.makedirs(struc_dir)
-                print(F"Directory {args.inpname}_IRC_{i} created.")
+                print(F"Directory {args.inpname}_IRC_{i} created.\n")
 
                 # From first up to N-1 IRC_traj structures parsing
                 if indices[i] < indices[-1]:
@@ -158,13 +276,13 @@ else:
                 out_name = basename + ".out"
                 inp_path = os.path.join(parent_dir, inp_name)
                 sp_inp(args.memory, args.processors, args.chrg, args.multip, xyz, inp_path)
-                print(F"{args.inpname}_IRC_{i}.inp input file created.")
+                print(F"{args.inpname}_IRC_{i}.inp input file created.\n")
                 shutil.move(inp_path, struc_dir)
                 os.chdir(struc_dir)
-                print(F"Moving to {struc_dir} directory.\nStarting {args.inpname}_IRC_{i}.inp calculation.")
+                print(F"Moving to {struc_dir} directory.\nStarting {args.inpname}_IRC_{i}.inp calculation.\n")
                 # Running the calculation
                 subprocess.run(F"{orca_dir} {inp_name} > {out_name}", shell=True, check=True)
-                print(F"{args.inpname}_IRC_{i}.inp calculation done successfully.")
+                print(F"{args.inpname}_IRC_{i}.inp calculation done successfully.\n")
                 out_path = os.path.join(struc_dir, out_name)
                 Eel_parser(out_path, parent_dir)
 
@@ -204,4 +322,35 @@ else:
                     IAO_chrg_parser(out_loc_path_beta, i, parent_dir, IAO_charges_output_beta)
                 print(F"------- End of step {i+1} from {len(indices)} -------\n\n")
                 os.chdir(parent_dir)
-            print(F"Done!")
+
+            # Charges (charge difference)² and RMSD calculation
+            if args.last_MO_beta == "None":
+                print("Atom   max(charge difference)²   RMSD")
+                results_file = os.path.join(parent_dir, F"{args.inpname}_IAO_charges.dat")
+                results_data = np.loadtxt(results_file, skiprows=1)
+                results(results_file, results_data)
+
+            else:
+                results_alpha_file = os.path.join(parent_dir, F"{args.inpname}_IAO_charges_alpha.dat")
+                results_beta_file = os.path.join(parent_dir, F"{args.inpname}_IAO_charges_beta.dat")
+                results_alpha_data = np.loadtxt(results_alpha_file, skiprows=1)
+                results_beta_data = np.loadtxt(results_beta_file, skiprows=1)
+
+                print("       *** Alpha MO results ***\nAtom   max(charge difference)²   RMSD")
+                results(results_alpha_file, results_alpha_data)
+                print("\n       *** Beta MO results ***\nAtom   max(charge difference)²   RMSD")
+                results(results_beta_file, results_beta_data)
+
+    endTime = timeit.default_timer()
+    n = endTime - startTime
+    day = n // (24 * 3600)
+    n = n % (24 * 3600)
+    hour = n // 3600
+
+    n %= 3600
+    minutes = n // 60
+
+    n %= 60
+    seconds = n
+    print(F"""Done!
+Total running time: {int(day)} days, {int(hour)} hours, {int(day)} days, {int(seconds)} seconds.""")
