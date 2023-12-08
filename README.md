@@ -1,10 +1,8 @@
 # IAO-IBO_IRC
 Python script to calculate the IAO-IBO orbital localization for each IRC structure from an ORCA calculation.
 
-Positional arguments:
-
-  fname                 XYZ file
-
+Positional arguments:\n
+  fname                 XYZ file\n
 
 Optional arguments:
 
