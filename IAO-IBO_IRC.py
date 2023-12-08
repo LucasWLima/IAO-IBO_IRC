@@ -13,7 +13,7 @@
 #     -n [basename] --last_MO_alpha [No. last alpha MO]  #
 #     --last_MO_beta [No. last beta MO]                  #
 #                                                        #
-#          Last version written on Dec 05 2023.          #
+#          Last version written on Dec 08 2023.          #
 ##########################################################
 import os
 import argparse
@@ -21,7 +21,6 @@ import shutil
 import glob
 import subprocess
 import re
-import timeit
 import datetime
 import numpy as np
 
@@ -155,14 +154,18 @@ def IAO_chrg_parser(loc_output, iterator, parent_dir, IAO_charges_output_name):
                 f.write(line)
             print(F"Results for {os.path.basename(loc_output)} written at {os.path.basename(results_file)}.\n")
 
-def square_dif(array):
+def square_dif(array, flip=False):
     """
     Calculates the square of the difference between the charge in the Nth point of the
     IRC path in relation to the first point
     :param array: Array with the charges
+    :param flip: Reverses the order in which the differences are calculated
     :return: Array with square of the differences
     """
-    return [(array[i] - array[0])**2 for i in range(0, len(array))]
+    if flip==False:
+        return [(array[i] - array[0])**2 for i in range(0, len(array))]
+    else:
+        return [(array[i] - array[-1])**2 for i in range(len(array)-1, -1, -1)]
 
 def rmsd(array):
     """
@@ -203,7 +206,7 @@ def results(file, data):
     :param data: Arrays with the charges
     """
     for atom in range(0, len(atoms(file))):
-        Square_dif = square_dif(data[:,atom])
+        Square_dif = square_dif(data[:,atom], args.flip)
         Max_Square_dif = max_square_dif(Square_dif)
         rmsd_value = rmsd(Square_dif)
         if len(atoms(file)[atom]) == 4:
@@ -222,6 +225,8 @@ parser.add_argument('-p', '--processors', default='12', help='Processing cores')
 parser.add_argument('-n', '--inpname', default=None, help='Chosen input name')
 parser.add_argument('--last_MO_alpha', default='None', help='Last occupied alpha MO')
 parser.add_argument('--last_MO_beta', default='None', help='Last occupied beta MO')
+parser.add_argument('--flip', default=False,
+                    help='Reverses the order in which the differences are calculated')
 
 args = parser.parse_args()
 
@@ -236,7 +241,6 @@ if len(filenames) == 0:
     Please, give a valid XYZ file for job submission.""")
 
 else:
-    startTime = timeit.default_timer()
     print(F"""================= Calculation info =================
 IRC trajectory file:       {args.fname}
 Input basename:            {args.inpname}
@@ -341,16 +345,5 @@ Calculation starting date: {datetime.date.today()}
                 print("\n       *** Beta MO results ***\nAtom   max(charge difference)²   RMSD")
                 results(results_beta_file, results_beta_data)
 
-    endTime = timeit.default_timer()
-    n = endTime - startTime
-    day = n // (24 * 3600)
-    n = n % (24 * 3600)
-    hour = n // 3600
-
-    n %= 3600
-    minutes = n // 60
-
-    n %= 60
-    seconds = n
-    print(F"""Done!
-Total running time: {int(day)} days, {int(hour)} hours, {int(day)} days, {int(seconds)} seconds.""")
+    print("""\n***** HURRAY!!! *****
+    Calculation ended successfully!""")
