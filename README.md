@@ -25,6 +25,21 @@ _Optional arguments:_
   * --last_MO_beta (integer)     Last occupied beta MO
   
   * --flip (Boolean)             Reverses the order in which the differences are calculated
+
+_Examples of use:_ 
+
+  * Calculation of the IAO-IBO charges of foo0_IRC_Full_trj.xyz IRC trajectory file:
+
+    > python3 IAO-IBO_IRC.py foo0_IRC_Full_trj.xyz -p 2 -m 2000 --chrg 1 -n foo0 --last_MO_alpha 10
+
+    In this case, the the molecule's multiplicity is defined as 1 (singlet), since no other integer is given. Consequently, no --last_MO_beta (integer) is required.
+
+  * Calculation of the IAO-IBO charges of foo1_IRC_Full_trj.xyz IRC trajectory file selecting the multiplicity, last beta occupied MO, and the flip option:
+
+    > python3 IAO-IBO_IRC.py foo1_IRC_Full_trj.xyz -p 2 -m 2000 --chrg 1 --multip 2 -n foo1 --last_MO_alpha 10 --last_MO_beta 9 flip True
+
+    The flip option was used in this case because the order in which the structures were printed in the foo1_IRC_Full_trj.xyz is the inverse that expected (i.e, the structures in the product side of the IRC were printed firstly), hence the square of the differences between charges is done in reverse order.
+    
   
 
 
