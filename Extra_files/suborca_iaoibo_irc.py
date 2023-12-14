@@ -8,8 +8,7 @@ import os
 ORCA_version_default = '5.0.3'  # ORCA default version used for the calculation.
 cpus_default = '10'  # Default number of threads (CPUs) used for the calculation.
 queue_default = 'SP2'  # Default queue used for the calculation.
-email = ' '  # email address to inform the user when the job ended.
-IAOIBO_IRC_path = ' ' # path to IAO-IBO_IRC.py script
+email = 'lucas.welington.lima@usp.br'  # email address to inform the user when the job ended.
 
 if __name__ == "__main__":
 
@@ -28,14 +27,9 @@ if __name__ == "__main__":
                         help='Number of CPUs used by SLURM for the job.')
     parser.add_argument('--partition', '-q', choices=['SP2', 'TEST'], default=queue_default,
                         help='Number of CPUs used by SLURM for the job.')
-    parser.add_argument('--multip', default='1', help="Molecule's multiplicity")
-    parser.add_argument('--chrg', default='0', help="Molecule's charge")
-    parser.add_argument('-m', '--memory', default='6000', help='Maximum memory required per processing core')
-    parser.add_argument('-n', '--inpname', default=None, help='Chosen input name')
-    parser.add_argument('--last_MO_alpha', default='None', help='Last occupied alpha MO')
-    parser.add_argument('--last_MO_beta', default='None', help='Last occupied beta MO')
-    parser.add_argument('--flip', default=False,
-                        help='Reverses the order in which the differences are calculated')
+    parser.add_argument('--MO_alpha', default=True, help='Last occupied alpha MO')
+    parser.add_argument('--MO_beta', default=False, help='Last occupied beta MO')
+
 
     args = parser.parse_args()
 
@@ -50,7 +44,8 @@ if __name__ == "__main__":
             'The file \"{}\" does not exist or there is a typo in the input name.\nPlease, give a valid input for job submission.'.format(
                 inpfile))
     else:
-        basename = args.inpname
+        fname_splitted = args.fname.split('.')
+        basename = fname_splitted[0]
 
         # ORCA version definition
         if args.orca_version == '5.0.4':
@@ -79,7 +74,7 @@ if __name__ == "__main__":
             total_run_time = '1:00:00'
 
             # Arguments used for the job
-        SLURM_settings = F"""#!/bin/bash 
+        SLURM_settings1 = F"""#!/bin/bash 
 #
 #SBATCH --partition={args.partition}
 #SBATCH -J {basename} 
@@ -107,13 +102,20 @@ export PATH=$PATH:$ORCA_DIR
 echo $PATH
 echo $LD_LIBRARY_PATH
 
+module unload openmpi
 module load {orca_module}
-module load Anaconda/3-2022.05
 cd {directory}
-IAOIBO_IRC={IAOIBO_IRC_path}
-srun python3 $IAOIBO_IRC {args.fname} -p {number_cpus} --multip {args.multip} -n {basename} --last_MO_alpha {args.last_MO_alpha} --last_MO_beta {args.last_MO_beta} --flip {args.flip} > {basename}.out
-
 """
+        if args.MO_beta == False:
+            SLURM_settings2 = F"""{orca_dir}/orca {basename}.inp > {basename}.out
+{orca_dir}/orca_loc {basename}_loc.inp > {basename}_loc.out            
+"""
+        else:
+            SLURM_settings2 = F"""{orca_dir}/orca {basename}.inp > {basename}.out
+{orca_dir}/orca_loc {basename}_loc_alpha.inp > {basename}_loc_alpha.out            
+{orca_dir}/orca_loc {basename}_loc_beta.inp > {basename}_loc_beta.out
+"""
+        SLURM_settings = SLURM_settings1 + SLURM_settings2
 
         # Writing submission script:
         submission_filename = basename + '.slurm'
