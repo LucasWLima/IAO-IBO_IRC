@@ -23,6 +23,10 @@ _Optional arguments:_
   * --last_MO_alpha (integer)    Last occupied alpha MO
   
   * --last_MO_beta (integer)     Last occupied beta MO
+
+  * --MO_alpha (Boolean)         Asks for localization of alpha orbitals (in suborca_iaoibo_irc.py job submissions only)
+  
+  * --MO_beta (Boolean)          Asks for localization of beta orbitals (in suborca_iaoibo_irc.py job submissions only)
   
   * --flip (Boolean)             Reverses the order in which the differences are calculated
 
