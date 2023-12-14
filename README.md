@@ -8,27 +8,27 @@ _Positional arguments:_
 
 _Optional arguments:_
 
-  * -h, --help                   Show a help message and exit
+  * -h, --help:                   Show a help message and exit
   
-  * --multip (integer)           Molecule's multiplicity
+  * --multip (integer):           Molecule's multiplicity
   
-  * --chrg (integer)             Molecule's charge
+  * --chrg (integer):             Molecule's charge
   
-  * -m, --memory (integer)       Maximum memory required per processing core (in MB)
+  * -m, --memory (integer):       Maximum memory required per processing core (in MB)
   
-  * -p, --processors (integer)   Processing cores
+  * -p, --processors (integer):   Processing cores
   
-  * -n, --inpname (string)       Chosen input name
+  * -n, --inpname (string):       Chosen input name
   
-  * --last_MO_alpha (integer)    Last occupied alpha MO
+  * --last_MO_alpha (integer):    Last occupied alpha MO
   
-  * --last_MO_beta (integer)     Last occupied beta MO
+  * --last_MO_beta (integer):     Last occupied beta MO
 
-  * --MO_alpha (Boolean)         Asks for localization of alpha orbitals (in suborca_iaoibo_irc.py job submissions only)
+  * --MO_alpha (Boolean):         Asks for localization of alpha orbitals (in suborca_iaoibo_irc.py job submissions only)
   
-  * --MO_beta (Boolean)          Asks for localization of beta orbitals (in suborca_iaoibo_irc.py job submissions only)
+  * --MO_beta (Boolean):          Asks for localization of beta orbitals (in suborca_iaoibo_irc.py job submissions only)
   
-  * --flip (Boolean)             Reverses the order in which the differences are calculated
+  * --flip (Boolean):             Reverses the order in which the differences are calculated
 
 _Examples of use:_ 
 
