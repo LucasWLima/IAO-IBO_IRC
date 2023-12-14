@@ -2,31 +2,23 @@
 #                     IAO-IBO_IRC.py                     #
 ##########################################################
 # Script written by Lucas W. de Lima.                    #
-# This script automates the calculation of single points #
-# and localizes the occupied molecular orbitals from     #
-# these calculations through the IAO-IBO method for each #
-# structure of an IRC path. Then parses the electronic   #
-# energy and IAO-OBO charges from the ORCA output files. #
+# This script creates directories and input files for    #
+# single point calculations and localizes the occupied   #
+# molecular orbitals from these calculations through     #
+# the IAO-IBO method for each structure of an IRC path.  #
 # Run the calculation as:                                #
-# $ python3 IAO-IBO_IRC.py fname -p [No. procs]          #
+# $ python3 IAO-IBO_IRC_dir-inp.py fname -p [No. procs]  #
 #     --multip [multiplicity] -m [max. memory]           #
 #     -n [basename] --last_MO_alpha [No. last alpha MO]  #
 #     --last_MO_beta [No. last beta MO]                  #
 #                                                        #
-#          Last version written on Dec 08 2023.          #
+#          Last version written on Dec 13 2023.          #
 ##########################################################
 import os
 import argparse
 import shutil
 import glob
-import subprocess
-import re
 import datetime
-#import numpy as np
-
-# ORCA binaries path:
-orca_dir = "/temporario/apps/gnu/orca_5_0_3_linux_x86-64_shared_openmpi411/orca"
-orca_loc_dir = "/temporario/apps/gnu/orca_5_0_3_linux_x86-64_shared_openmpi411/orca_loc"
 
 def sp_inp(maxcore, pal, chrg, multip, XYZ, filename):
     """
@@ -85,134 +77,6 @@ def loc_inp(basename, iteration, last_MO, operator, filename):
 """
     with open(filename, "w+") as f:
         f.write(loc_inp_text)
-
-def Eel_parser(file, parent_dir):
-    """
-    Parses the electronic energy of the single point calculation and writes the results
-    in the single_point_energies.dat file located in the parent directory
-    :param file: Name of the file to be parsed
-    :param parent_dir: Name of the parent directory
-    """
-    with open(file, "r") as f:
-        data = f.read()
-        searchbox = re.findall(r"FINAL SINGLE POINT ENERGY(.*)\n", data)
-        Electronic_energy = searchbox[0].strip()
-        basename = os.path.basename(file).split(".")
-        basename = basename[0]
-        # Writing results into single_point_energies.dat file
-        sp_energies_file = os.path.join(parent_dir, "single_point_energies.dat")
-        with open(sp_energies_file, "a+") as f:
-            f.write(F"{basename} {Electronic_energy}\n")
-        print(F"Single point energy for {basename} written at single_point_energy.dat file.\n")
-
-def IAO_chrg_parser(loc_output, iterator, parent_dir, IAO_charges_output_name):
-    """
-    Parses the IAO-IBO charges from the output of the localization calculation,
-    and writes the results in the proper charges output in the parent directory
-    :param loc_output: Output from the localization calculation
-    :param iterator: Iteration of the loop in which the function is called
-    :param parent_dir: Name of the parent directory
-    :param IAO_charges_output_name: Output of the IAO-IBO charges
-    """
-    with open(loc_output, 'r') as f:
-        data = f.read()
-        searchbox = re.findall(r"^Warning!!!(.*)^Initial", data, re.MULTILINE | re.DOTALL)
-        searchbox = searchbox[0].split("\n")
-        charge_lines = searchbox[1:-3]
-        sum_charges = searchbox[-3].split(" ")
-        sum_charges = sum_charges[-1]
-        splitted_lines = [line.split(":") for line in charge_lines]
-        atoms = []
-        charges = []
-        for lst in range(0, len(splitted_lines)):
-            charge = splitted_lines[lst][1]
-            charge = charge.strip()
-            charges.append(charge)
-        for lst in range(0, len(splitted_lines)):
-            atom = splitted_lines[lst][0]
-            atom = atom.strip()
-            atom = atom.replace(" ", "-")
-            atoms.append(atom)
-        charges_line = ""
-        for i in range(0, len(charges)):
-            charges_line += F"{charges[i]} "
-        atoms_line = ""
-        for i in range(0, len(atoms)):
-            atoms_line += F"{atoms[i]} "
-        header = atoms_line + "Sum_charges\n"
-        line = charges_line + F"{sum_charges}\n"
-        results_file = os.path.join(parent_dir, IAO_charges_output_name)
-        # Writing the results
-        if iterator == 0:
-            with open(results_file, "a+") as f:
-                f.write(header)
-            with open(results_file, "a+") as f:
-                f.write(line)
-            print(F"Results for {os.path.basename(loc_output)} written at {os.path.basename(results_file)}.\n")
-        elif iterator > 0:
-            with open(results_file, "a+") as f:
-                f.write(line)
-            print(F"Results for {os.path.basename(loc_output)} written at {os.path.basename(results_file)}.\n")
-
-def square_dif(array, flip=False):
-    """
-    Calculates the square of the difference between the charge in the Nth point of the
-    IRC path in relation to the first point
-    :param array: Array with the charges
-    :param flip: Reverses the order in which the differences are calculated
-    :return: Array with square of the differences
-    """
-    if flip==False:
-        return [(array[i] - array[0])**2 for i in range(0, len(array))]
-    else:
-        return [(array[i] - array[-1])**2 for i in range(len(array)-1, -1, -1)]
-
-def rmsd(array):
-    """
-    Calculates the RMSD between the charges
-    :param array: Array with square of the differences
-    :return: RMSD value between the charges
-    """
-    sum_x = np.sum(array)
-    n = len(array)
-    return np.sqrt((sum_x/n))
-
-def max_square_dif(array):
-    """
-    Shows the maximum value of the square of the difference between the charge in
-    the Nth point and the first point of the IRC path
-    :param array: Array with square of the differences
-    :return: Maximum value of the square of the differences
-    """
-    return np.max(array)
-
-def atoms(file):
-    """
-    Atoms of the molecule
-    :param file: Name of the output with the parsed charges for each atom
-    :return: List of numbered atoms
-    """
-    with open(file, "r") as f:
-        header = f.readline()
-        splitted_line = header.split(" ")
-        atoms = splitted_line[0:-1]
-    return atoms
-
-def results(file, data):
-    """
-    Writes the results of the maximum value of the square of the differences
-    and RMSD of the charges
-    :param file: Output with the charges
-    :param data: Arrays with the charges
-    """
-    for atom in range(0, len(atoms(file))):
-        Square_dif = square_dif(data[:,atom], args.flip)
-        Max_Square_dif = max_square_dif(Square_dif)
-        rmsd_value = rmsd(Square_dif)
-        if len(atoms(file)[atom]) == 4:
-            print(F"{atoms(file)[atom]}           {Max_Square_dif:.4f}          {rmsd_value:.4f}")
-        else:
-            print(F"{atoms(file)[atom]}            {Max_Square_dif:.4f}          {rmsd_value:.4f}")
 
 # Parser creation
 parser = argparse.ArgumentParser(description="Calculates the IAO-IBO for structures in an IRC path.")
@@ -277,73 +141,28 @@ Calculation starting date: {datetime.date.today()}
                 xyz = struc_coordinates[2:]
                 basename = F"{args.inpname}_IRC_{i}"
                 inp_name = basename + ".inp"
-                #out_name = basename + ".out"
                 inp_path = os.path.join(parent_dir, inp_name)
                 sp_inp(args.memory, args.processors, args.chrg, args.multip, xyz, inp_path)
                 print(F"{args.inpname}_IRC_{i}.inp input file created.\n")
                 shutil.move(inp_path, struc_dir)
                 os.chdir(struc_dir)
                 print(F"Moving to {struc_dir} directory.\nStarting {args.inpname}_IRC_{i}.inp calculation.\n")
-                # Running the calculation
-                #subprocess.run(F"{orca_dir} {inp_name} > {out_name}", shell=True, check=True)
-                #print(F"{args.inpname}_IRC_{i}.inp calculation done successfully.\n")
-                #out_path = os.path.join(struc_dir, out_name)
-                #Eel_parser(out_path, parent_dir)
 
                 # Localization calculation
                 if args.last_MO_beta == "None":
                     inp_loc_name = basename + "_loc.inp"
-                    #out_loc_name = basename + "_loc.out"
                     inp_loc_path = os.path.join(struc_dir, inp_loc_name)
-                    #out_loc_path = os.path.join(struc_dir, out_loc_name)
                     # Localization input creation
                     loc_inp(basename, i, args.last_MO_alpha, 0, inp_loc_path)
-                    # Running localization calculation
-                    #subprocess.run(F"{orca_loc_dir} {inp_loc_name} > {out_loc_name}",
-                    #               shell=True, check=True)
-                    # Parsing the charges from localization calculation
-                    #IAO_charges_output = F"{args.inpname}_IAO_charges.dat"
-                    #IAO_chrg_parser(out_loc_path, i, parent_dir, IAO_charges_output)
                 else:
                     inp_loc_name_alpha = basename + "_loc_alpha.inp"
-                    #out_loc_name_alpha = basename + "_loc_alpha.out"
                     inp_loc_path_alpha = os.path.join(struc_dir, inp_loc_name_alpha)
-                    #out_loc_path_alpha = os.path.join(struc_dir, out_loc_name_alpha)
                     loc_inp(basename, i, args.last_MO_alpha, 0, inp_loc_path_alpha)
                     inp_loc_name_beta = basename + "_loc_beta.inp"
-                    #out_loc_name_beta = basename + "_loc_beta.out"
                     inp_loc_path_beta = os.path.join(struc_dir, inp_loc_name_beta)
-                    #out_loc_path_beta = os.path.join(struc_dir, out_loc_name_beta)
                     loc_inp(basename, i, args.last_MO_beta, 1, inp_loc_path_beta)
-                    #subprocess.run(F"{orca_loc_dir} {basename}_loc_alpha.inp > {basename}_loc_alpha.out",
-                    #               shell=True, check=True)
-                    #subprocess.run(F"{orca_loc_dir} {basename}_loc_beta.inp > {basename}_loc_beta.out",
-                    #               shell=True, check=True)
-                    # Parsing the charges from localization calculation
-                    #IAO_charges_output_alpha = F"{args.inpname}_IAO_charges_alpha.dat"
-                    #IAO_charges_output_beta = F"{args.inpname}_IAO_charges_beta.dat"
-                    #IAO_chrg_parser(out_loc_path_alpha, i, parent_dir, IAO_charges_output_alpha)
-                    #IAO_chrg_parser(out_loc_path_beta, i, parent_dir, IAO_charges_output_beta)
                 print(F"------- End of step {i+1} from {len(indices)} -------\n\n")
                 os.chdir(parent_dir)
 
-            # Charges (charge difference)² and RMSD calculation
-            #if args.last_MO_beta == "None":
-            #    print("Atom   max(charge difference)²   RMSD")
-            #    results_file = os.path.join(parent_dir, F"{args.inpname}_IAO_charges.dat")
-            #    results_data = np.loadtxt(results_file, skiprows=1)
-            #    results(results_file, results_data)
-
-            #else:
-            #    results_alpha_file = os.path.join(parent_dir, F"{args.inpname}_IAO_charges_alpha.dat")
-            #    results_beta_file = os.path.join(parent_dir, F"{args.inpname}_IAO_charges_beta.dat")
-            #    results_alpha_data = np.loadtxt(results_alpha_file, skiprows=1)
-            #    results_beta_data = np.loadtxt(results_beta_file, skiprows=1)
-
-            #    print("       *** Alpha MO results ***\nAtom   max(charge difference)²   RMSD")
-            #    results(results_alpha_file, results_alpha_data)
-            #    print("\n       *** Beta MO results ***\nAtom   max(charge difference)²   RMSD")
-            #    results(results_beta_file, results_beta_data)
-
-    print("""\n               ***** HURRAY!!! *****
+    print("""\n             ***** HURRAY!!! *****
 Directories and input files created successfully!""")
