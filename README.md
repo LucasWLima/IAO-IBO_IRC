@@ -40,9 +40,15 @@ _Examples of use:_
 
   The flip option was used in this case because the order in which the structures were printed in the foo1_IRC_Full_trj.xyz is the inverse that expected (i.e, the structures in the product side of the IRC were printed firstly), hence the square of the differences between charges is done in reverse order.
     
-  * Use of the Extra_files/suborca_iaoibo_irc.py script to submit IAO-IBO_IRC jobs in a Slurm job scheduling system (cluster aguia4 - STI-USP):
+  * Use of Extra_files/IAO-IBO_IRC_dir-inp.py and Extra_files/suborca_iaoibo_irc.py scripts to create the directories and submit IAO-IBO_IRC jobs in a Slurm job scheduling system (cluster aguia4 - STI-USP):
 
-    > python3 suborca_iaoibo_irc.py foo2_IRC_Full_trj.xyz -p 10 -m 5000 --chrg 1 --multip 2 -n foo2 --last_MO_alpha 10 --last_MO_beta 9 flip True
+    Firstly, create the directories and input files (single point and localization calculations):
+    
+    > python3 IAO-IBO_IRC_dir-inp.py foo2_IRC_Full_trj.xyz -p 10 -m 5000 --chrg 1 --multip 2 -n foo2 --last_MO_alpha 10 --last_MO_beta
+
+    Then, secondly, run the calculations. Note that if an UKS calculation has to be performed, the flags --MO_alpha (Boolean) and --MO_beta (Boolean) should be specified. Otherwise, only one localization will be performed (using alpha orbitals as default):
+    
+    > python3 suborca_iaoibo_irc.py foo2_IRC_1.inp -p 10 --MO_alpha True --MO_beta True
 
   PS.: Note that the path for _orca_ and _orca_plot_ binaries must set both in IAO-IBO_IRC.py and suborca_iaoibo_irc.py.
 
